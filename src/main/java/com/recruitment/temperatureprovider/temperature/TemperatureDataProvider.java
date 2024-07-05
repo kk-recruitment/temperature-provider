@@ -2,7 +2,6 @@ package com.recruitment.temperatureprovider.temperature;
 
 import com.recruitment.temperatureprovider.temperature.exception.DataException;
 import com.recruitment.temperatureprovider.temperature.exception.FileReadingException;
-import com.recruitment.temperatureprovider.temperature.model.TemperatureData;
 import com.recruitment.temperatureprovider.temperature.model.YearlyAverageTemp;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -15,8 +14,9 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 @Component
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
@@ -26,16 +26,19 @@ class TemperatureDataProvider {
 
     List<YearlyAverageTemp> getYearlyAverageTemperatureListData(String city) {
         try (var lines = Files.lines(Paths.get(FILE_PATH))) {
-            return lines.map(this::mapToTemperatureData)
-                    .filter(data -> city.equals(data.city()))
-                    .collect(Collectors.groupingBy(
-                            data -> data.timestamp().getYear(),
-                            Collectors.collectingAndThen(
-                                    Collectors.averagingDouble(TemperatureData::temperature),
-                                    TemperatureDataProvider::roundDouble
-                            )))
-                    .entrySet().stream()
-                    .map(entry -> new YearlyAverageTemp(entry.getKey(), entry.getValue()))
+            Map<Integer, YearlyTemperatureData> yearToYearlyTempDataMap = new HashMap<>();
+            lines.map(line -> line.split(";"))
+                    .filter(data -> city.equals(data[0]))
+                    .forEach(data -> {
+                        var year = getTimestamp(data[1]).getYear();
+                        var temperature = getTemperature(data[2]);
+                        var yearlyTempData = yearToYearlyTempDataMap.getOrDefault(year, new YearlyTemperatureData());
+                        yearlyTempData.addTemperature(temperature);
+                        yearToYearlyTempDataMap.put(year, yearlyTempData);
+                    });
+
+            return yearToYearlyTempDataMap.entrySet().stream()
+                    .map(this::mapToYearlyAverageTemperature)
                     .sorted(Comparator.comparingInt(YearlyAverageTemp::year))
                     .toList();
         } catch (Exception e) {
@@ -43,16 +46,8 @@ class TemperatureDataProvider {
         }
     }
 
-    private TemperatureData mapToTemperatureData(String line) {
-        var data = line.split(";");
-        var city = data[0];
-        var timestamp = getTimestamp(data[1]);
-        var temperature = getTemperature(data[2]);
-        return new TemperatureData(city, timestamp, temperature);
-    }
-
-    private static double roundDouble(Double average) {
-        return BigDecimal.valueOf(average).setScale(1, RoundingMode.HALF_UP).doubleValue();
+    private YearlyAverageTemp mapToYearlyAverageTemperature(Map.Entry<Integer, YearlyTemperatureData> entry) {
+        return new YearlyAverageTemp(entry.getKey(), entry.getValue().getAverageTemperature());
     }
 
     private static double getTemperature(String temperatureValue) {
@@ -68,6 +63,20 @@ class TemperatureDataProvider {
             return LocalDateTime.parse(timestampValue, DateTimeFormatter.ofPattern(DATE_TIME_FORMAT));
         } catch (Exception e) {
             throw DataException.invalidTimestamp(timestampValue);
+        }
+    }
+
+    private static class YearlyTemperatureData {
+        private double totalTemperature = 0;
+        private int numberOfLogs = 0;
+
+        void addTemperature(double temperature) {
+            totalTemperature += temperature;
+            numberOfLogs++;
+        }
+
+        public double getAverageTemperature() {
+            return BigDecimal.valueOf(totalTemperature).divide(BigDecimal.valueOf(numberOfLogs), 1, RoundingMode.HALF_UP).doubleValue();
         }
     }
 }
