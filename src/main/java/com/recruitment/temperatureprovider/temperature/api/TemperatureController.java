@@ -16,7 +16,7 @@ import java.util.List;
 class TemperatureController {
     private final TemperatureService temperatureService;
 
-    @GetMapping("/average/{city}")
+    @GetMapping("/{city}/average")
     List<YearlyAverageTemp> getYearlyAverageTemperatureList(@PathVariable String city) {
         return temperatureService.getYearlyAverageTemperatureList(city);
     }

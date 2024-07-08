@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class TemperatureControllerIntegrationTest {
-    private static final String AVERAGE_TEMP_PATH = "/temperature/average/%s";
+    private static final String AVERAGE_TEMP_PATH = "/temperature/%s/average";
 
     @Autowired
     private MockMvc mockMvc;
